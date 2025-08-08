@@ -64,7 +64,7 @@ You are a Django Software Foundation expert on writing Django Working Groups and
 """
 
 
-class Result(BaseModel):
+class Output(BaseModel):
     charter: str = Field(..., description="Our draft or updated charter")
 
     chair: str | None = Field("TBD", description="The Chair of the working group")
@@ -160,7 +160,7 @@ def get_agent():
 
     agent = Agent(
         model=OPENAI_MODEL_NAME,
-        result_type=Result,
+        output_type=Output,
         system_prompt=system_prompt,
     )
 
@@ -172,22 +172,22 @@ def main(question: str, model_name: str = OPENAI_MODEL_NAME):
 
     result = agent.run_sync(question)
 
-    print(f"[yellow][bold]Reasoning:[/bold][/yellow] {result.data.reasoning}\n")
-    print(f"[yellow][bold]Chair:[/bold][/yellow] {result.data.chair}\n")
-    print(f"[yellow][bold]Co-Chair:[/bold][/yellow] {result.data.co_chair}\n")
-    print(f"[yellow][bold]Board Liaison:[/bold][/yellow] {result.data.board_liaison}\n")
+    print(f"[yellow][bold]Reasoning:[/bold][/yellow] {result.output.reasoning}\n")
+    print(f"[yellow][bold]Chair:[/bold][/yellow] {result.output.chair}\n")
+    print(f"[yellow][bold]Co-Chair:[/bold][/yellow] {result.output.co_chair}\n")
+    print(f"[yellow][bold]Board Liaison:[/bold][/yellow] {result.output.board_liaison}\n")
 
-    if result.data.members:
+    if result.output.members:
         print("[yellow][bold]Members:[/bold][/yellow]")
-        for member in result.data.members:
+        for member in result.output.members:
             print(f"- {member}")
 
-    if result.data.sections:
+    if result.output.sections:
         print("[yellow][bold]Sections:[/bold][/yellow]")
-        for section in result.data.sections:
+        for section in result.output.sections:
             print(f"- {section}")
 
-    print(f"[green][bold]Charter:[/bold][/green] {result.data.charter}\n")
+    print(f"[green][bold]Charter:[/bold][/green] {result.output.charter}\n")
 
 
 if __name__ == "__main__":
