@@ -22,7 +22,7 @@ from rich import print
 
 
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
-OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="o3-mini")
+OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="gpt-5-mini")
 
 # Directory for saving results
 OUTPUT_DIR: Path = Path(env.str("OUTPUT_DIR", default="cache"))
