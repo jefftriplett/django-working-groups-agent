@@ -10,6 +10,8 @@
 # ]
 # ///
 
+import subprocess
+
 import httpx
 import typer
 
@@ -27,6 +29,10 @@ OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="gpt-5-mini")
 # Directory for saving results
 OUTPUT_DIR: Path = Path(env.str("OUTPUT_DIR", default="cache"))
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Git repository settings
+DSF_WORKING_GROUPS_REPO = "https://github.com/django/dsf-working-groups.git"
+DSF_WORKING_GROUPS_DIR: Path = OUTPUT_DIR / "dsf-working-groups"
 
 SYSTEM_PROMPT = """
 <system_context>
@@ -61,6 +67,12 @@ You are a Django Software Foundation expert on writing Django Working Groups and
 
 </working_group_template>
 
+<active_working_groups>
+
+{active_working_groups}
+
+</active_working_groups>
+
 """
 
 
@@ -76,12 +88,46 @@ class Output(BaseModel):
     sections: list[str] = Field(..., description="Sections to reference")
 
 
+def sync_git_repo():
+    """Clone or pull the dsf-working-groups repository."""
+    if DSF_WORKING_GROUPS_DIR.exists():
+        subprocess.run(
+            ["git", "-C", str(DSF_WORKING_GROUPS_DIR), "pull", "--quiet"],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        subprocess.run(
+            ["git", "clone", "--quiet", DSF_WORKING_GROUPS_REPO, str(DSF_WORKING_GROUPS_DIR)],
+            check=True,
+            capture_output=True,
+        )
+
+
+def read_repo_file(relative_path: str) -> str:
+    """Read a file from the local dsf-working-groups checkout."""
+    file_path = DSF_WORKING_GROUPS_DIR / relative_path
+    return file_path.read_text()
+
+
+def get_active_working_groups() -> dict[str, str]:
+    """Read all active working group charters from the repository."""
+    active_dir = DSF_WORKING_GROUPS_DIR / "active"
+    working_groups = {}
+    if active_dir.exists():
+        for file_path in active_dir.glob("*.md"):
+            name = file_path.stem
+            working_groups[name] = file_path.read_text()
+    return working_groups
+
+
 def fetch_and_cache(
     *,
     url: str,
     cache_file: str,
     timeout: float = 10.0,
 ):
+    """Fetch content from URL and cache it locally."""
     filename = Path(OUTPUT_DIR, cache_file)
     if filename.exists():
         return filename.read_text()
@@ -97,65 +143,32 @@ def fetch_and_cache(
 
 
 def get_agent():
+    # Sync the git repository (clone or pull)
+    sync_git_repo()
+
+    # Fetch foundation teams from Django website (not in git repo)
     foundation_teams = fetch_and_cache(
         url="https://www.djangoproject.com/foundation/teams/",
         cache_file="django-foundation-teams.md",
     )
 
-    readme = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/README.md",
-        cache_file="dsf-working-groups-readme.md",
-    )
+    # Read files from local git checkout
+    readme = read_repo_file("README.md")
+    working_group_template = read_repo_file("template.md")
 
-    working_group_template = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/template.md",
-        cache_file="dsf-working-groups-template.md",
-    )
+    # Get all active working groups dynamically
+    working_groups = get_active_working_groups()
 
-    code_of_conduct = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/code-of-conduct.md",
-        cache_file="working-groups-code-of-conduct.md",
-    )
-    # dceu = fetch_and_cache(
-    #     url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/dceu.md",
-    #     cache_file="working-groups-dceu.md",
-    # )
-
-    fellowship = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/fellowship.md",
-        cache_file="working-groups-fellowship.md",
-    )
-
-    fundraising = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/fundraising.md",
-        cache_file="working-groups-fundraising.md",
-    )
-
-    online_community = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/online-community.md",
-        cache_file="working-groups-online-community.md",
-    )
-
-    social_media = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/social-media.md",
-        cache_file="working-groups-social-media.md",
-    )
-
-    website = fetch_and_cache(
-        url="https://raw.githubusercontent.com/django/dsf-working-groups/refs/heads/main/active/website.md",
-        cache_file="working-groups-website.md",
-    )
+    # Format active working groups for the system prompt
+    active_working_groups_text = ""
+    for name, content in sorted(working_groups.items()):
+        active_working_groups_text += f"## {name}\n\n{content}\n\n"
 
     system_prompt = SYSTEM_PROMPT.format(
-        code_of_conduct=code_of_conduct,
-        fellowship=fellowship,
         foundation_teams=foundation_teams,
-        fundraising=fundraising,
-        online_community=online_community,
         readme=readme,
-        social_media=social_media,
-        website=website,
         working_group_template=working_group_template,
+        active_working_groups=active_working_groups_text,
     )
 
     agent = Agent(
