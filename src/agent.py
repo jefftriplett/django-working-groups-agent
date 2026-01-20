@@ -20,8 +20,9 @@ from pathlib import Path
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic_ai import Agent
-from rich import print
+from rich.console import Console
 
+console = Console()
 
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
 OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="gpt-5-mini")
@@ -164,28 +165,65 @@ def get_agent():
     return agent
 
 
-def main(question: str, model_name: str = OPENAI_MODEL_NAME):
+app = typer.Typer(help="Django Working Groups Agent - Help write working group charters")
+
+
+@app.command()
+def ask(question: str):
+    """Ask the working groups agent a question."""
     agent = get_agent()
 
     result = agent.run_sync(question)
 
-    print(f"[yellow][bold]Reasoning:[/bold][/yellow] {result.output.reasoning}\n")
-    print(f"[yellow][bold]Chair:[/bold][/yellow] {result.output.chair}\n")
-    print(f"[yellow][bold]Co-Chair:[/bold][/yellow] {result.output.co_chair}\n")
-    print(f"[yellow][bold]Board Liaison:[/bold][/yellow] {result.output.board_liaison}\n")
+    console.print(f"[yellow][bold]Reasoning:[/bold][/yellow] {result.output.reasoning}\n")
+    console.print(f"[yellow][bold]Chair:[/bold][/yellow] {result.output.chair}\n")
+    console.print(f"[yellow][bold]Co-Chair:[/bold][/yellow] {result.output.co_chair}\n")
+    console.print(f"[yellow][bold]Board Liaison:[/bold][/yellow] {result.output.board_liaison}\n")
 
     if result.output.members:
-        print("[yellow][bold]Members:[/bold][/yellow]")
+        console.print("[yellow][bold]Members:[/bold][/yellow]")
         for member in result.output.members:
-            print(f"- {member}")
+            console.print(f"- {member}")
 
     if result.output.sections:
-        print("[yellow][bold]Sections:[/bold][/yellow]")
+        console.print("[yellow][bold]Sections:[/bold][/yellow]")
         for section in result.output.sections:
-            print(f"- {section}")
+            console.print(f"- {section}")
 
-    print(f"[green][bold]Charter:[/bold][/green] {result.output.charter}\n")
+    console.print(f"[green][bold]Charter:[/bold][/green] {result.output.charter}\n")
+
+
+@app.command()
+def debug():
+    """Print the compiled system prompt for debugging."""
+    # Sync the git repository
+    sync_git_repo()
+
+    # Fetch foundation teams
+    foundation_teams = fetch_and_cache(
+        url="https://www.djangoproject.com/foundation/teams/",
+        cache_file="django-foundation-teams.md",
+    )
+
+    # Read files from local git checkout
+    readme = read_repo_file("README.md")
+    working_group_template = read_repo_file("template.md")
+
+    # Get all active working groups
+    working_groups = get_active_working_groups()
+    active_working_groups_text = ""
+    for name, content in sorted(working_groups.items()):
+        active_working_groups_text += f"## {name}\n\n{content}\n\n"
+
+    console.print("[bold cyan]===== SYSTEM PROMPT =====[/bold cyan]\n")
+    console.print(SYSTEM_PROMPT)
+    console.print("\n[bold cyan]===== INSTRUCTIONS =====[/bold cyan]\n")
+    console.print(f"<readme>\n\n{readme}\n\n</readme>")
+    console.print(f"\n<foundation_teams>\n\n{foundation_teams}\n\n</foundation_teams>")
+    console.print(f"\n<working_group_template>\n\n{working_group_template}\n\n</working_group_template>")
+    console.print(f"\n<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>")
+    console.print("\n[bold cyan]=========================[/bold cyan]")
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
