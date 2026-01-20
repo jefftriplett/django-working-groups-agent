@@ -8,7 +8,7 @@ export JUST_UNSTABLE := "true"
 
 # Process with the Django working groups agent
 @agent *ARGS:
-    uv --quiet run agent.py "{{ ARGS }}"
+    uv --quiet run src/agent.py "{{ ARGS }}"
 
 # Ask the working groups agent a question
 @ask *ARGS:
