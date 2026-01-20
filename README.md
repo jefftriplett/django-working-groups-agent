@@ -23,7 +23,7 @@ just bootstrap
 
 ```shell
 # Using uv directly
-$ uv run agent.py "Please write a draft working group charter for the Accessibility team."
+$ uv run src/agent.py "Please write a draft working group charter for the Accessibility team."
 
 # Using just command
 $ just ask "Please write a draft working group charter for the Accessibility team."
