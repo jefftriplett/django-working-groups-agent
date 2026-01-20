@@ -48,31 +48,6 @@ You are a Django Software Foundation expert on writing Django Working Groups and
 - If you do not know who the chair, co-chair, or boar liason is, default to "TBD" instead of guessing.
 
 </behavior_guidelines>
-
-<readme>
-
-{readme}
-
-</readme>
-
-<foundation_teams>
-
-{foundation_teams}
-
-</foundation_teams>
-
-<working_group_template>
-
-{working_group_template}
-
-</working_group_template>
-
-<active_working_groups>
-
-{active_working_groups}
-
-</active_working_groups>
-
 """
 
 
@@ -164,18 +139,27 @@ def get_agent():
     for name, content in sorted(working_groups.items()):
         active_working_groups_text += f"## {name}\n\n{content}\n\n"
 
-    system_prompt = SYSTEM_PROMPT.format(
-        foundation_teams=foundation_teams,
-        readme=readme,
-        working_group_template=working_group_template,
-        active_working_groups=active_working_groups_text,
-    )
-
     agent = Agent(
         model=OPENAI_MODEL_NAME,
         output_type=Output,
-        system_prompt=system_prompt,
+        system_prompt=SYSTEM_PROMPT,
     )
+
+    @agent.instructions
+    def add_readme() -> str:
+        return f"<readme>\n\n{readme}\n\n</readme>"
+
+    @agent.instructions
+    def add_foundation_teams() -> str:
+        return f"<foundation_teams>\n\n{foundation_teams}\n\n</foundation_teams>"
+
+    @agent.instructions
+    def add_working_group_template() -> str:
+        return f"<working_group_template>\n\n{working_group_template}\n\n</working_group_template>"
+
+    @agent.instructions
+    def add_active_working_groups() -> str:
+        return f"<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>"
 
     return agent
 
