@@ -17,6 +17,47 @@ import typer
 
 from environs import env
 from pathlib import Path
+
+MEMORY_FILE = Path(__file__).parent.parent / "MEMORY.md"
+
+DEFAULT_MEMORY_CONTENT = """\
+# Memory
+
+Additional context for the Django Working Groups agent.
+
+## Examples of what to add here:
+
+- Known board members and their roles
+- Your role in the DSF (if applicable)
+- Preferred charter formatting style
+- Common terminology or naming conventions
+- Notes about specific working groups
+"""
+
+
+def load_memory_from_markdown(filepath: Path = MEMORY_FILE) -> str | None:
+    """Load memory markdown content. Returns None if file doesn't exist."""
+    if not filepath.exists():
+        return None
+    return filepath.read_text()
+
+
+def create_default_memory_file(filepath: Path = MEMORY_FILE) -> None:
+    """Create a default MEMORY.md file."""
+    filepath.write_text(DEFAULT_MEMORY_CONTENT)
+
+
+def get_memory_context() -> str:
+    """Generate memory context for the system prompt."""
+    content = load_memory_from_markdown()
+    if content is None:
+        create_default_memory_file()
+        return ""
+    if content.strip() == DEFAULT_MEMORY_CONTENT.strip():
+        return ""
+    if not content.strip():
+        return ""
+    return f"<memory>\n\n{content}\n\n</memory>"
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic_ai import Agent
@@ -162,6 +203,10 @@ def get_agent():
     def add_active_working_groups() -> str:
         return f"<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>"
 
+    @agent.instructions
+    def add_memory_context() -> str:
+        return get_memory_context()
+
     return agent
 
 
@@ -222,6 +267,12 @@ def debug():
     console.print(f"\n<foundation_teams>\n\n{foundation_teams}\n\n</foundation_teams>")
     console.print(f"\n<working_group_template>\n\n{working_group_template}\n\n</working_group_template>")
     console.print(f"\n<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>")
+    console.print("\n[bold cyan]===== MEMORY CONTEXT =====[/bold cyan]\n")
+    memory_ctx = get_memory_context()
+    if memory_ctx:
+        console.print(memory_ctx)
+    else:
+        console.print("[dim](no memory context)[/dim]")
     console.print("\n[bold cyan]=========================[/bold cyan]")
 
 
