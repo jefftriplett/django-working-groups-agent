@@ -17,6 +17,10 @@ import typer
 
 from environs import env
 from pathlib import Path
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic_ai import Agent
+from rich.console import Console
 
 MEMORY_FILE = Path(__file__).parent.parent / "MEMORY.md"
 
@@ -58,10 +62,7 @@ def get_memory_context() -> str:
     if not content.strip():
         return ""
     return f"<memory>\n\n{content}\n\n</memory>"
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic_ai import Agent
-from rich.console import Console
+
 
 console = Console()
 
