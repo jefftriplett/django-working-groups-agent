@@ -5,6 +5,7 @@
 #     "httpx",
 #     "environs",
 #     "pydantic-ai-slim[openai]",
+#     "pydantic-ai-slim[web]",
 #     "rich",
 #     "typer",
 # ]
@@ -160,7 +161,7 @@ def fetch_and_cache(
     return contents
 
 
-def get_agent():
+def load_data():
     # Sync the git repository (clone or pull)
     sync_git_repo()
 
@@ -172,7 +173,7 @@ def get_agent():
 
     # Read files from local git checkout
     readme = read_repo_file("README.md")
-    working_group_template = read_repo_file("template.md")
+    template = read_repo_file("template.md")
 
     # Get all active working groups dynamically
     working_groups = get_active_working_groups()
@@ -182,31 +183,45 @@ def get_agent():
     for name, content in sorted(working_groups.items()):
         active_working_groups_text += f"## {name}\n\n{content}\n\n"
 
+    memory = get_memory_context()
+
+    return {
+        "readme": readme,
+        "foundation_teams": foundation_teams,
+        "template": template,
+        "active_working_groups": active_working_groups_text,
+        "memory": memory,
+    }
+
+
+def get_agent(*, output_type=Output):
+    data = load_data()
+
     agent = Agent(
         model=OPENAI_MODEL_NAME,
-        output_type=Output,
+        output_type=output_type,
         system_prompt=SYSTEM_PROMPT,
     )
 
     @agent.instructions
     def add_readme() -> str:
-        return f"<readme>\n\n{readme}\n\n</readme>"
+        return f"<readme>\n\n{data['readme']}\n\n</readme>"
 
     @agent.instructions
     def add_foundation_teams() -> str:
-        return f"<foundation_teams>\n\n{foundation_teams}\n\n</foundation_teams>"
+        return f"<foundation_teams>\n\n{data['foundation_teams']}\n\n</foundation_teams>"
 
     @agent.instructions
     def add_working_group_template() -> str:
-        return f"<working_group_template>\n\n{working_group_template}\n\n</working_group_template>"
+        return f"<working_group_template>\n\n{data['template']}\n\n</working_group_template>"
 
     @agent.instructions
     def add_active_working_groups() -> str:
-        return f"<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>"
+        return f"<active_working_groups>\n\n{data['active_working_groups']}\n\n</active_working_groups>"
 
     @agent.instructions
     def add_memory_context() -> str:
-        return get_memory_context()
+        return data["memory"]
 
     return agent
 
@@ -240,38 +255,35 @@ def ask(question: str):
 
 
 @app.command()
+def web(
+    host: str = "127.0.0.1",
+    port: int = 8080,
+):
+    """Launch the working groups agent as a web chat interface."""
+    import uvicorn
+
+    agent = get_agent(output_type=None)
+    web_app = agent.to_web()
+
+    console.print(f"[bold green]Starting web interface at http://{host}:{port}[/bold green]")
+    uvicorn.run(web_app, host=host, port=port)
+
+
+@app.command()
 def debug():
     """Print the compiled system prompt for debugging."""
-    # Sync the git repository
-    sync_git_repo()
-
-    # Fetch foundation teams
-    foundation_teams = fetch_and_cache(
-        url="https://www.djangoproject.com/foundation/teams/",
-        cache_file="django-foundation-teams.md",
-    )
-
-    # Read files from local git checkout
-    readme = read_repo_file("README.md")
-    working_group_template = read_repo_file("template.md")
-
-    # Get all active working groups
-    working_groups = get_active_working_groups()
-    active_working_groups_text = ""
-    for name, content in sorted(working_groups.items()):
-        active_working_groups_text += f"## {name}\n\n{content}\n\n"
+    data = load_data()
 
     console.print("[bold cyan]===== SYSTEM PROMPT =====[/bold cyan]\n")
     console.print(SYSTEM_PROMPT)
     console.print("\n[bold cyan]===== INSTRUCTIONS =====[/bold cyan]\n")
-    console.print(f"<readme>\n\n{readme}\n\n</readme>")
-    console.print(f"\n<foundation_teams>\n\n{foundation_teams}\n\n</foundation_teams>")
-    console.print(f"\n<working_group_template>\n\n{working_group_template}\n\n</working_group_template>")
-    console.print(f"\n<active_working_groups>\n\n{active_working_groups_text}\n\n</active_working_groups>")
+    console.print(f"<readme>\n\n{data['readme']}\n\n</readme>")
+    console.print(f"\n<foundation_teams>\n\n{data['foundation_teams']}\n\n</foundation_teams>")
+    console.print(f"\n<working_group_template>\n\n{data['template']}\n\n</working_group_template>")
+    console.print(f"\n<active_working_groups>\n\n{data['active_working_groups']}\n\n</active_working_groups>")
     console.print("\n[bold cyan]===== MEMORY CONTEXT =====[/bold cyan]\n")
-    memory_ctx = get_memory_context()
-    if memory_ctx:
-        console.print(memory_ctx)
+    if data["memory"]:
+        console.print(data["memory"])
     else:
         console.print("[dim](no memory context)[/dim]")
     console.print("\n[bold cyan]=========================[/bold cyan]")
