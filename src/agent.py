@@ -228,7 +228,10 @@ def get_agent(*, output_type=Output):
     return agent
 
 
-app = typer.Typer(help="Django Working Groups Agent - Help write working group charters")
+app = typer.Typer(
+    help="Django Working Groups Agent - Help write working group charters",
+    no_args_is_help=True,
+)
 
 
 @app.command()
