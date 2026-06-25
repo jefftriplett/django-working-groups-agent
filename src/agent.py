@@ -4,8 +4,8 @@
 # dependencies = [
 #     "httpx",
 #     "environs",
-#     "pydantic-ai-slim[openai]",
-#     "pydantic-ai-slim[web]",
+#     "pydantic-ai-slim[openai]>=2,<3",
+#     "pydantic-ai-slim[web]>=2,<3",
 #     "rich",
 #     "typer",
 #     "uvicorn",
@@ -70,7 +70,7 @@ def get_memory_context() -> str:
 console = Console()
 
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
-OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="gpt-5-mini")
+OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="openai:gpt-5.4-nano")
 
 # Directory for saving results
 OUTPUT_DIR: Path = Path(env.str("OUTPUT_DIR", default="cache"))
