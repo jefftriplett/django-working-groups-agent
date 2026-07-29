@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#     "httpx",
+#     "httpx2",
 #     "environs",
 #     "pydantic-ai-slim[openai]>=2,<3",
 #     "rich",
@@ -12,8 +12,9 @@
 # ///
 
 import subprocess
+import time
 
-import httpx
+import httpx2
 import typer
 import uvicorn
 
@@ -70,6 +71,8 @@ console = Console()
 
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
 OPENAI_MODEL_NAME: str = env.str("OPENAI_MODEL_NAME", default="openai:gpt-5.4-nano")
+
+CACHE_MAX_AGE_HOURS: float = env.float("CACHE_MAX_AGE_HOURS", default=24.0)
 
 # Directory for saving results
 OUTPUT_DIR: Path = Path(env.str("OUTPUT_DIR", default="cache"))
@@ -141,19 +144,35 @@ def get_active_working_groups() -> dict[str, str]:
     return working_groups
 
 
+def cache_is_fresh(filename: Path, max_age_hours: float) -> bool:
+    """Return True if the cache file exists and is younger than max_age_hours."""
+    if not filename.exists() or max_age_hours <= 0:
+        return False
+
+    return (time.time() - filename.stat().st_mtime) < (max_age_hours * 3600)
+
+
 def fetch_and_cache(
     *,
     url: str,
     cache_file: str,
     timeout: float = 10.0,
+    max_age_hours: float = CACHE_MAX_AGE_HOURS,
+    refresh: bool = False,
 ):
     """Fetch content from URL and cache it locally."""
     filename = Path(OUTPUT_DIR, cache_file)
-    if filename.exists():
+    if not refresh and cache_is_fresh(filename, max_age_hours):
         return filename.read_text()
 
-    response = httpx.get(f"https://r.jina.ai/{url}", timeout=timeout)
-    response.raise_for_status()
+    try:
+        response = httpx2.get(f"https://r.jina.ai/{url}", timeout=timeout, follow_redirects=True)
+        response.raise_for_status()
+    except httpx2.HTTPError as exc:
+        if filename.exists():
+            console.print(f"[yellow]Could not refresh {filename}: {exc}. Using the cached copy.[/yellow]")
+            return filename.read_text()
+        raise
 
     contents = response.text
 
@@ -162,7 +181,7 @@ def fetch_and_cache(
     return contents
 
 
-def load_data():
+def load_data(*, refresh: bool = False):
     # Sync the git repository (clone or pull)
     sync_git_repo()
 
@@ -170,6 +189,7 @@ def load_data():
     foundation_teams = fetch_and_cache(
         url="https://www.djangoproject.com/foundation/teams/",
         cache_file="django-foundation-teams.md",
+        refresh=refresh,
     )
 
     # Read files from local git checkout
@@ -195,8 +215,8 @@ def load_data():
     }
 
 
-def get_agent(*, output_type=Output):
-    data = load_data()
+def get_agent(*, output_type=Output, refresh: bool = False):
+    data = load_data(refresh=refresh)
 
     agent = Agent(
         model=OPENAI_MODEL_NAME,
@@ -234,9 +254,12 @@ app = typer.Typer(
 
 
 @app.command()
-def ask(question: str):
+def ask(
+    question: str,
+    refresh: bool = typer.Option(False, help="Re-fetch the source documents, ignoring the cache."),
+):
     """Ask the working groups agent a question."""
-    agent = get_agent()
+    agent = get_agent(refresh=refresh)
 
     result = agent.run_sync(question)
 
@@ -262,9 +285,10 @@ def ask(question: str):
 def web(
     host: str = "127.0.0.1",
     port: int = 8080,
+    refresh: bool = typer.Option(False, help="Re-fetch the source documents, ignoring the cache."),
 ):
     """Launch the working groups agent as a web chat interface."""
-    agent = get_agent(output_type=None)
+    agent = get_agent(output_type=None, refresh=refresh)
     web_app = agent.to_web()
 
     console.print(f"[bold green]Starting web interface at http://{host}:{port}[/bold green]")
@@ -272,9 +296,11 @@ def web(
 
 
 @app.command()
-def debug():
+def debug(
+    refresh: bool = typer.Option(False, help="Re-fetch the source documents, ignoring the cache."),
+):
     """Print the compiled system prompt for debugging."""
-    data = load_data()
+    data = load_data(refresh=refresh)
 
     console.print("[bold cyan]===== SYSTEM PROMPT =====[/bold cyan]\n")
     console.print(SYSTEM_PROMPT)
