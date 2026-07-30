@@ -112,13 +112,22 @@ class Output(BaseModel):
 
 
 def sync_git_repo():
-    """Clone or pull the dsf-working-groups repository."""
-    if DSF_WORKING_GROUPS_DIR.exists():
-        subprocess.run(
-            ["git", "-C", str(DSF_WORKING_GROUPS_DIR), "pull", "--quiet"],
-            check=True,
-            capture_output=True,
-        )
+    """Clone or pull the dsf-working-groups repository.
+
+    Syncing is best effort. Generated charters sitting in the cache as untracked files
+    will block a merge, and that should not stop the agent from running.
+    """
+    if (DSF_WORKING_GROUPS_DIR / ".git").exists():
+        try:
+            subprocess.run(
+                ["git", "-C", str(DSF_WORKING_GROUPS_DIR), "pull", "--quiet"],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as error:
+            console.print(f"[yellow]Could not update the charters, using the local copy: {error}[/yellow]")
+    elif DSF_WORKING_GROUPS_DIR.exists():
+        console.print(f"[yellow]{DSF_WORKING_GROUPS_DIR} is not a git clone — using the files as they are.[/yellow]")
     else:
         subprocess.run(
             ["git", "clone", "--quiet", DSF_WORKING_GROUPS_REPO, str(DSF_WORKING_GROUPS_DIR)],
